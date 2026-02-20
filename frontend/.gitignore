@@ -1,0 +1,71 @@
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Dependency directories
+jspm_packages/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Package manager locks (uncomment if you don’t want them)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Temporary files
+tmp/
+temp/
+
+# Cache
+.cache/
+.parcel-cache/
+
+# Test output
+test-results/
+
+# Uploads / user files
+uploads/
+public/uploads/
+
+# Supabase / local config
+.supabase/
+
+# Keys & certificates
+*.key
+*.pem
+*.crt
+
+# Misc
+*.local

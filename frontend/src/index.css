@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-cream-50 text-brown-800 font-sans;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brown-400 hover:bg-brown-500 text-white font-semibold 
+           px-6 py-3 rounded-full transition-all duration-200 
+           shadow-warm hover:shadow-warm-lg active:scale-95 cursor-pointer;
+  }
+  .btn-secondary {
+    @apply border-2 border-brown-400 text-brown-600 hover:bg-brown-400 hover:text-white 
+           font-semibold px-6 py-3 rounded-full transition-all duration-200 cursor-pointer;
+  }
+  .btn-outline {
+    @apply border border-brown-300 text-brown-500 hover:bg-cream-100 
+           px-4 py-2 rounded-full text-sm transition-all duration-200 cursor-pointer;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-warm p-6;
+  }
+  .input {
+    @apply w-full border border-cream-200 rounded-xl px-4 py-3 
+           bg-cream-50 focus:outline-none focus:ring-2 focus:ring-brown-300 
+           focus:border-transparent text-brown-800 placeholder-brown-300 transition-all;
+  }
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+  }
+  .badge-green  { @apply bg-green-100 text-green-700; }
+  .badge-red    { @apply bg-red-100 text-red-700; }
+  .badge-yellow { @apply bg-yellow-100 text-yellow-700; }
+  .badge-blue   { @apply bg-blue-100 text-blue-700; }
+  .badge-brown  { @apply bg-cream-200 text-brown-600; }
+}
+
+/* Smooth scroll */
+html { scroll-behavior: smooth; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #fdf8f0; }
+::-webkit-scrollbar-thumb { background: #c4956a; border-radius: 6px; }
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.animate-fade-in { animation: fadeIn 0.4s ease forwards; }
+
+/* Shimmer skeleton */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f5e0c0 25%, #faf0e0 50%, #f5e0c0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
