@@ -78,21 +78,7 @@ const getProduct = async (req, res) => {
             return res.status(404).json({ error: 'Product not found.' });
         }
 
-        // Fetch product images
-        const { data: images } = await supabaseAdmin
-            .from('product_images')
-            .select('*')
-            .eq('product_id', id);
-
-        // Fetch reviews with joined user profile
-        const { data: reviews } = await supabaseAdmin
-            .from('reviews')
-            .select(`*, user_profiles:user_id(full_name)`)
-            .eq('product_id', id)
-            .order('created_at', { ascending: false })
-            .limit(10);
-
-        res.json({ product: { ...product, images: images || [], reviews: reviews || [] } });
+        res.json({ product });
     } catch (err) {
         console.error('Get product error:', err);
         res.status(500).json({ error: 'Failed to fetch product.' });

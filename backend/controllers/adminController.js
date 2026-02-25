@@ -18,7 +18,7 @@ const getAllProducts = async (req, res) => {
 
 const createProduct = async (req, res) => {
     try {
-        const { name, description, price, stock, category_id, image_url, slug, is_active = true } = req.body;
+        const { name, description, price, stock, category_id, image_url, is_active = true } = req.body;
 
         const { data, error } = await supabaseAdmin
             .from('products')
@@ -29,7 +29,6 @@ const createProduct = async (req, res) => {
                 stock: parseInt(stock) || 0,
                 category_id,
                 image_url,
-                slug: slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
                 is_active
             })
             .select()
@@ -46,7 +45,7 @@ const createProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, description, price, stock, category_id, image_url, slug, is_active } = req.body;
+        const { name, description, price, stock, category_id, image_url, is_active, rating } = req.body;
 
         const updates = {};
         if (name !== undefined) updates.name = name;
@@ -55,8 +54,8 @@ const updateProduct = async (req, res) => {
         if (stock !== undefined) updates.stock = parseInt(stock);
         if (category_id !== undefined) updates.category_id = category_id;
         if (image_url !== undefined) updates.image_url = image_url;
-        if (slug !== undefined) updates.slug = slug;
         if (is_active !== undefined) updates.is_active = is_active;
+        if (rating !== undefined) updates.rating = parseFloat(rating);
 
         const { data, error } = await supabaseAdmin
             .from('products')
@@ -122,6 +121,31 @@ const createCategory = async (req, res) => {
     }
 };
 
+const updateCategory = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, image_url } = req.body;
+
+        const updates = {};
+        if (name !== undefined) updates.name = name;
+        if (description !== undefined) updates.description = description;
+        if (image_url !== undefined) updates.image_url = image_url;
+
+        const { data, error } = await supabaseAdmin
+            .from('categories')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json({ message: 'Category updated.', category: data });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to update category.' });
+    }
+};
+
 const deleteCategory = async (req, res) => {
     try {
         await supabaseAdmin.from('categories').delete().eq('id', req.params.id);
@@ -143,7 +167,7 @@ const getAllOrders = async (req, res) => {
             .select(`
         *,
         user_profiles:user_id(full_name, email),
-        order_items(*, products(name, price))
+        order_items(*, products(name, price, image_url))
       `, { count: 'exact' })
             .order('created_at', { ascending: false })
             .range(offset, offset + parseInt(limit) - 1);
@@ -183,6 +207,69 @@ const updateOrderStatus = async (req, res) => {
     }
 };
 
+// ── Users (Admin) ─────────────────────────────────────────
+
+const getAllUsers = async (req, res) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('user_profiles')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        res.json({ users: data });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch users.' });
+    }
+};
+
+const updateUserRole = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role } = req.body;
+
+        const validRoles = ['customer', 'admin'];
+        if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role.' });
+
+        const { data, error } = await supabaseAdmin
+            .from('user_profiles')
+            .update({ role })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json({ message: 'User role updated.', user: data });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to update user role.' });
+    }
+};
+
+// ── Inventory Logs ────────────────────────────────────────
+
+const getInventoryLogs = async (req, res) => {
+    try {
+        const { product_id, page = 1, limit = 50 } = req.query;
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+
+        let query = supabaseAdmin
+            .from('inventory_logs')
+            .select('*, products(id, name)', { count: 'exact' })
+            .order('created_at', { ascending: false })
+            .range(offset, offset + parseInt(limit) - 1);
+
+        if (product_id) query = query.eq('product_id', product_id);
+
+        const { data, error, count } = await query;
+        if (error) throw error;
+        res.json({ logs: data, total: count });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch inventory logs.' });
+    }
+};
+
 // ── Reports ───────────────────────────────────────────────
 
 const getSalesSummary = async (req, res) => {
@@ -199,6 +286,7 @@ const getSalesSummary = async (req, res) => {
 
         const totalRevenue = (orders || []).reduce((s, o) => s + parseFloat(o.total_amount), 0);
         const totalOrders = (orders || []).length;
+        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
         const { count: totalCustomers } = await supabaseAdmin
             .from('user_profiles')
@@ -225,6 +313,7 @@ const getSalesSummary = async (req, res) => {
             totalRevenue,
             totalOrders,
             totalCustomers,
+            avgOrderValue,
             revenueByDay: Object.entries(revenueByDay).map(([date, amount]) => ({ date, amount }))
         });
     } catch (err) {
@@ -264,7 +353,7 @@ const getLowStock = async (req, res) => {
         const { threshold = 10 } = req.query;
         const { data, error } = await supabaseAdmin
             .from('products')
-            .select('id, name, stock, categories(name)')
+            .select('id, name, stock, image_url, categories(name)')
             .eq('is_active', true)
             .lte('stock', parseInt(threshold))
             .order('stock', { ascending: true });
@@ -277,28 +366,30 @@ const getLowStock = async (req, res) => {
     }
 };
 
-// ── Reviews ───────────────────────────────────────────────
+// ── Payments ──────────────────────────────────────────────
 
-const getReviews = async (req, res) => {
+const getAllPayments = async (req, res) => {
     try {
         const { data, error } = await supabaseAdmin
-            .from('reviews')
-            .select(`*, products(name), user_profiles(full_name)`)
+            .from('payments')
+            .select('*, orders(id, user_id, total_amount, status)')
             .order('created_at', { ascending: false })
-            .limit(50);
+            .limit(100);
 
         if (error) throw error;
-        res.json({ reviews: data });
+        res.json({ payments: data });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Failed to fetch reviews.' });
+        res.status(500).json({ error: 'Failed to fetch payments.' });
     }
 };
 
 module.exports = {
     getAllProducts, createProduct, updateProduct, deleteProduct,
-    getCategories, createCategory, deleteCategory,
+    getCategories, createCategory, updateCategory, deleteCategory,
     getAllOrders, updateOrderStatus,
+    getAllUsers, updateUserRole,
+    getInventoryLogs,
     getSalesSummary, getTopProducts, getLowStock,
-    getReviews
+    getAllPayments
 };

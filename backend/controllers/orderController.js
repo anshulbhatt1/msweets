@@ -3,29 +3,45 @@ const { supabaseAdmin } = require('../config/supabase');
 // POST /api/orders/create
 const createOrder = async (req, res) => {
     try {
-        const { shipping_address } = req.body;
+        const { address, items: frontendItems } = req.body;
         const userId = req.user.id;
 
-        if (!shipping_address) {
-            return res.status(400).json({ error: 'Shipping address is required.' });
+        // Optionally update user address on profile
+        if (address) {
+            await supabaseAdmin
+                .from('user_profiles')
+                .update({ address })
+                .eq('id', userId);
         }
 
-        // Get user's cart
-        const { data: cart } = await supabaseAdmin
-            .from('carts')
-            .select('id')
-            .eq('user_id', userId)
-            .maybeSingle();
+        let orderItemsSource = [];
 
-        if (!cart) return res.status(400).json({ error: 'Your cart is empty.' });
+        // If frontend sends items directly (from localStorage cart)
+        if (frontendItems && frontendItems.length > 0) {
+            orderItemsSource = frontendItems;
+        } else {
+            // Fallback: use server-side cart
+            const { data: cart } = await supabaseAdmin
+                .from('carts')
+                .select('id')
+                .eq('user_id', userId)
+                .maybeSingle();
 
-        const { data: cartItems } = await supabaseAdmin
-            .from('cart_items')
-            .select(`*, products(id, name, price, stock, is_active)`)
-            .eq('cart_id', cart.id);
+            if (!cart) return res.status(400).json({ error: 'Your cart is empty.' });
 
-        if (!cartItems || cartItems.length === 0) {
-            return res.status(400).json({ error: 'Your cart is empty.' });
+            const { data: cartItems } = await supabaseAdmin
+                .from('cart_items')
+                .select(`*, products(id, name, price, stock, is_active)`)
+                .eq('cart_id', cart.id);
+
+            if (!cartItems || cartItems.length === 0) {
+                return res.status(400).json({ error: 'Your cart is empty.' });
+            }
+
+            orderItemsSource = cartItems.map(ci => ({
+                id: ci.products.id,
+                quantity: ci.quantity
+            }));
         }
 
         // Validate items — always use server-side price, never trust frontend
@@ -33,21 +49,29 @@ const createOrder = async (req, res) => {
         const orderItemsData = [];
         const errors = [];
 
-        for (const item of cartItems) {
-            const product = item.products;
-            if (!product || !product.is_active) {
-                errors.push(`"${product?.name || 'A product'}" is no longer available.`);
+        for (const item of orderItemsSource) {
+            const productId = item.id || item.product_id;
+            const qty = parseInt(item.quantity);
+
+            const { data: product, error: pe } = await supabaseAdmin
+                .from('products')
+                .select('id, name, price, stock, is_active')
+                .eq('id', productId)
+                .single();
+
+            if (pe || !product || !product.is_active) {
+                errors.push(`A product is no longer available.`);
                 continue;
             }
-            if (item.quantity > product.stock) {
+            if (qty > product.stock) {
                 errors.push(`"${product.name}" only has ${product.stock} units left.`);
                 continue;
             }
             const serverPrice = parseFloat(product.price);
-            total += serverPrice * item.quantity;
+            total += serverPrice * qty;
             orderItemsData.push({
                 product_id: product.id,
-                quantity: item.quantity,
+                quantity: qty,
                 price: serverPrice
             });
         }
@@ -62,8 +86,7 @@ const createOrder = async (req, res) => {
                 user_id: userId,
                 status: 'pending',
                 payment_status: 'unpaid',
-                total_amount: total,
-                shipping_address
+                total_amount: total
             })
             .select()
             .single();
@@ -73,6 +96,41 @@ const createOrder = async (req, res) => {
         // Insert order items
         const itemsWithOrderId = orderItemsData.map(i => ({ ...i, order_id: order.id }));
         await supabaseAdmin.from('order_items').insert(itemsWithOrderId);
+
+        // Deduct stock for each product
+        for (const item of orderItemsData) {
+            const { data: prod } = await supabaseAdmin
+                .from('products')
+                .select('stock')
+                .eq('id', item.product_id)
+                .single();
+
+            if (prod) {
+                const newStock = prod.stock - item.quantity;
+                await supabaseAdmin
+                    .from('products')
+                    .update({ stock: Math.max(0, newStock) })
+                    .eq('id', item.product_id);
+
+                // Log inventory change
+                await supabaseAdmin.from('inventory_logs').insert({
+                    product_id: item.product_id,
+                    change_amount: -item.quantity,
+                    reason: `Order ${order.id.slice(0, 8)}`
+                });
+            }
+        }
+
+        // Clear server-side cart if it exists
+        const { data: cart } = await supabaseAdmin
+            .from('carts')
+            .select('id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (cart) {
+            await supabaseAdmin.from('cart_items').delete().eq('cart_id', cart.id);
+        }
 
         res.status(201).json({ message: 'Order created successfully.', order });
     } catch (err) {

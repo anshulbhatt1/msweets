@@ -1,28 +1,50 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import api from '../services/api'
 
 export default function Login() {
-    const { login } = useAuth()
+    const { login, isLoggedIn, isAdmin } = useAuth()
     const navigate = useNavigate()
+    const location = useLocation()
 
     const [form, setForm] = useState({ email: '', password: '' })
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+
+    // Where to go after login (support ?redirect=xxx)
+    const from = location.state?.from || new URLSearchParams(location.search).get('redirect') || '/'
+
+    // If already logged in, redirect immediately
+    useEffect(() => {
+        if (isLoggedIn) {
+            navigate(isAdmin ? '/admin/dashboard' : from, { replace: true })
+        }
+    }, [isLoggedIn, isAdmin, navigate, from])
 
     const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
     const handleSubmit = async e => {
         e.preventDefault()
         setError('')
+
+        if (!form.email || !form.password) {
+            setError('Please enter your email and password.')
+            return
+        }
+
         setLoading(true)
         try {
             const user = await login(form.email, form.password)
-            if (user.role === 'admin') navigate('/admin/dashboard')
-            else navigate('/')
+
+            // Redirect based on role
+            if (user.role === 'admin') {
+                navigate('/admin/dashboard', { replace: true })
+            } else {
+                navigate(from, { replace: true })
+            }
         } catch (err) {
-            setError(err.response?.data?.error || 'Login failed. Check your credentials.')
+            const msg = err.response?.data?.error || 'Login failed. Check your credentials.'
+            setError(msg)
         } finally {
             setLoading(false)
         }
@@ -32,7 +54,7 @@ export default function Login() {
         <div className="min-h-screen flex items-center justify-center px-4"
             style={{ background: 'linear-gradient(135deg, #fdf0e0 0%, #fae0d0 100%)' }}>
 
-            <div className="w-full max-w-md">
+            <div className="w-full max-w-md animate-fade-in">
                 <div className="text-center mb-8">
                     <div className="w-16 h-16 bg-gradient-to-br from-brown-300 to-brown-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-warm">
                         🧁
@@ -44,14 +66,15 @@ export default function Login() {
                 <div className="card shadow-warm-lg">
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
-                                {error}
+                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+                                <span>⚠️</span> {error}
                             </div>
                         )}
 
                         <div>
-                            <label className="block text-sm font-medium text-brown-700 mb-1.5">Email</label>
+                            <label htmlFor="login-email" className="block text-sm font-medium text-brown-700 mb-1.5">Email</label>
                             <input
+                                id="login-email"
                                 name="email" type="email" required autoComplete="email"
                                 value={form.email} onChange={handleChange}
                                 className="input" placeholder="you@example.com"
@@ -59,16 +82,23 @@ export default function Login() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-brown-700 mb-1.5">Password</label>
+                            <label htmlFor="login-password" className="block text-sm font-medium text-brown-700 mb-1.5">Password</label>
                             <input
+                                id="login-password"
                                 name="password" type="password" required autoComplete="current-password"
                                 value={form.password} onChange={handleChange}
                                 className="input" placeholder="••••••••"
                             />
                         </div>
 
-                        <button type="submit" disabled={loading} className="btn-primary w-full mt-2 disabled:opacity-60">
-                            {loading ? 'Signing in…' : 'Sign In'}
+                        <button type="submit" disabled={loading}
+                            className="btn-primary w-full mt-2 disabled:opacity-60 flex items-center justify-center gap-2">
+                            {loading ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Signing in…
+                                </>
+                            ) : 'Sign In'}
                         </button>
                     </form>
 

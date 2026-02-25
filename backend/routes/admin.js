@@ -29,18 +29,26 @@ router.delete('/products/:id', adminController.deleteProduct);
 // ── Categories ────────────────────────────────────────────
 router.get('/categories', adminController.getCategories);
 router.post('/categories', adminController.createCategory);
+router.put('/categories/:id', adminController.updateCategory);
 router.delete('/categories/:id', adminController.deleteCategory);
 
 // ── Orders ────────────────────────────────────────────────
 router.get('/orders', adminController.getAllOrders);
 router.put('/orders/:id/status', adminController.updateOrderStatus);
 
+// ── Users ─────────────────────────────────────────────────
+router.get('/users', adminController.getAllUsers);
+router.put('/users/:id/role', adminController.updateUserRole);
+
+// ── Inventory Logs ────────────────────────────────────────
+router.get('/inventory-logs', adminController.getInventoryLogs);
+
+// ── Payments ──────────────────────────────────────────────
+router.get('/payments', adminController.getAllPayments);
+
 // ── Reports ───────────────────────────────────────────────
 router.get('/reports/sales-summary', adminController.getSalesSummary);
 router.get('/reports/top-products', adminController.getTopProducts);
 router.get('/reports/low-stock', adminController.getLowStock);
-
-// ── Reviews ───────────────────────────────────────────────
-router.get('/reviews', adminController.getReviews);
 
 module.exports = router;

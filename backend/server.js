@@ -22,30 +22,41 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['X-New-Access-Token']   // allow frontend to read refreshed tokens
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  message: { error: 'Too many requests. Please try again later.' }
-});
-app.use('/api/', limiter);
-
-// Auth rate limiter (stricter)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: 'Too many auth attempts. Please try again later.' }
-});
-
-// Body parsers
+// Body parsers + cookies (BEFORE routes)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Routes
+// ── Rate limiting ───────────────────────────────────────────
+// General API limiter
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 200,
+  message: { error: 'Too many requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api/', apiLimiter);
+
+// Strict limiter for login/signup only (not /me or /refresh)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { error: 'Too many auth attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Only apply to login and signup
+  skip: (req) => {
+    const path = req.path.toLowerCase();
+    return path !== '/login' && path !== '/signup';
+  }
+});
+
+// ── Routes ──────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);
@@ -72,6 +83,25 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Sweet Haven Backend running on port ${PORT}`);
+  console.log(`🌐 CORS origin: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+
+  // ── Startup Supabase connectivity check ──
+  try {
+    const { supabaseAdmin } = require('./config/supabase');
+    const { data, error } = await supabaseAdmin.from('user_profiles').select('id').limit(1);
+    if (error) {
+      console.warn(`⚠️  Supabase connected but query failed: ${error.message}`);
+      console.warn(`   Check that your tables exist (run supabase-schema.sql if needed).`);
+    } else {
+      console.log(`✅ Supabase connected successfully!`);
+    }
+  } catch (err) {
+    console.error(`❌ SUPABASE CONNECTION FAILED!`);
+    console.error(`   URL: ${process.env.SUPABASE_URL}`);
+    console.error(`   Error: ${err.message}`);
+    console.error(`   → Your Supabase project may be PAUSED. Go to https://supabase.com/dashboard to restore it.`);
+    console.error(`   → Auth (login/signup) will NOT work until Supabase is reachable.`);
+  }
 });

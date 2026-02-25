@@ -114,29 +114,6 @@ export default function ProductDetail() {
                     </div>
                 </div>
             </div>
-
-            {/* Reviews */}
-            {product.reviews?.length > 0 && (
-                <div className="mt-16">
-                    <h2 className="font-display text-2xl font-bold text-brown-800 mb-6">Customer Reviews</h2>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {product.reviews.map(r => (
-                            <div key={r.id} className="bg-white rounded-2xl p-5 shadow-warm">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 bg-brown-300 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                            {r.user_profiles?.full_name?.charAt(0) || '?'}
-                                        </div>
-                                        <span className="font-medium text-brown-700 text-sm">{r.user_profiles?.full_name || 'Anonymous'}</span>
-                                    </div>
-                                    <RatingStars rating={r.rating} size="sm" />
-                                </div>
-                                <p className="text-brown-500 text-sm leading-relaxed">{r.comment}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
         </div>
     )
 }

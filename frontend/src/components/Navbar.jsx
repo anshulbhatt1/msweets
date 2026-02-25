@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 
@@ -10,11 +10,31 @@ export default function Navbar() {
     const location = useLocation()
     const [menuOpen, setMenuOpen] = useState(false)
     const [profileOpen, setProfileOpen] = useState(false)
+    const profileRef = useRef(null)
+
+    // Close profile dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (profileRef.current && !profileRef.current.contains(e.target)) {
+                setProfileOpen(false)
+            }
+        }
+        if (profileOpen) {
+            document.addEventListener('mousedown', handleClickOutside)
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [profileOpen])
+
+    // Close menus on route change
+    useEffect(() => {
+        setMenuOpen(false)
+        setProfileOpen(false)
+    }, [location.pathname])
 
     const handleLogout = async () => {
+        setProfileOpen(false)
         await logout()
         navigate('/')
-        setProfileOpen(false)
     }
 
     const isActive = (path) => location.pathname === path
@@ -63,10 +83,12 @@ export default function Navbar() {
 
                         {/* User / auth */}
                         {user ? (
-                            <div className="relative">
+                            <div className="relative" ref={profileRef}>
                                 <button
                                     onClick={() => setProfileOpen(o => !o)}
                                     className="flex items-center gap-2 p-2 rounded-full hover:bg-cream-100 transition-colors"
+                                    aria-label="User menu"
+                                    aria-expanded={profileOpen}
                                 >
                                     <div className="w-8 h-8 bg-brown-300 rounded-full flex items-center justify-center text-white font-semibold text-sm">
                                         {user.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase()}
@@ -74,26 +96,38 @@ export default function Navbar() {
                                 </button>
 
                                 {profileOpen && (
-                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-warm-lg border border-cream-200 py-2 z-50 animate-fade-in">
-                                        <p className="px-4 py-2 text-xs text-brown-400 font-medium truncate">{user.email}</p>
+                                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-warm-lg border border-cream-200 py-2 z-50 animate-fade-in">
+                                        <div className="px-4 py-2">
+                                            <p className="text-sm font-medium text-brown-700 truncate">{user.full_name}</p>
+                                            <p className="text-xs text-brown-400 truncate">{user.email}</p>
+                                        </div>
                                         <hr className="border-cream-200 my-1" />
-                                        <DropItem to="/dashboard" label="My Dashboard" onClick={() => setProfileOpen(false)} />
-                                        <DropItem to="/my-orders" label="My Orders" onClick={() => setProfileOpen(false)} />
-                                        {isAdmin && <DropItem to="/admin/dashboard" label="Admin Panel" onClick={() => setProfileOpen(false)} />}
+                                        <DropItem to="/dashboard" label="My Dashboard" icon="📊" />
+                                        <DropItem to="/my-orders" label="My Orders" icon="📦" />
+                                        {isAdmin && (
+                                            <>
+                                                <hr className="border-cream-200 my-1" />
+                                                <DropItem to="/admin/dashboard" label="Admin Panel" icon="⚙️" />
+                                            </>
+                                        )}
                                         <hr className="border-cream-200 my-1" />
                                         <button onClick={handleLogout}
-                                            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors">
-                                            Sign Out
+                                            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2">
+                                            <span>🚪</span> Sign Out
                                         </button>
                                     </div>
                                 )}
                             </div>
                         ) : (
-                            <Link to="/login" className="btn-primary text-sm py-2 px-5">Sign In</Link>
+                            <div className="flex items-center gap-2">
+                                <Link to="/login" className="hidden sm:block text-sm font-medium text-brown-600 hover:text-brown-800 transition-colors px-3 py-2">Sign In</Link>
+                                <Link to="/signup" className="btn-primary text-sm py-2 px-5">Sign Up</Link>
+                            </div>
                         )}
 
                         {/* Mobile hamburger */}
-                        <button className="md:hidden p-2 rounded-full hover:bg-cream-100" onClick={() => setMenuOpen(o => !o)}>
+                        <button className="md:hidden p-2 rounded-full hover:bg-cream-100" onClick={() => setMenuOpen(o => !o)}
+                            aria-label="Menu" aria-expanded={menuOpen}>
                             <svg className="w-6 h-6 text-brown-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 {menuOpen
                                     ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -108,11 +142,18 @@ export default function Navbar() {
             {/* Mobile menu */}
             {menuOpen && (
                 <div className="md:hidden border-t border-cream-200 bg-white px-4 py-3 space-y-1 animate-fade-in">
-                    <MobileNavLink to="/" label="Home" onClick={() => setMenuOpen(false)} />
-                    <MobileNavLink to="/products" label="Products" onClick={() => setMenuOpen(false)} />
-                    <MobileNavLink to="/about" label="About" onClick={() => setMenuOpen(false)} />
-                    <MobileNavLink to="/contact" label="Contact" onClick={() => setMenuOpen(false)} />
-                    {isAdmin && <MobileNavLink to="/admin/dashboard" label="Admin Panel" onClick={() => setMenuOpen(false)} />}
+                    <MobileNavLink to="/" label="Home" />
+                    <MobileNavLink to="/products" label="Products" />
+                    <MobileNavLink to="/about" label="About" />
+                    <MobileNavLink to="/contact" label="Contact" />
+                    {!user && (
+                        <>
+                            <hr className="border-cream-200 my-2" />
+                            <MobileNavLink to="/login" label="Sign In" />
+                            <MobileNavLink to="/signup" label="Sign Up" />
+                        </>
+                    )}
+                    {isAdmin && <MobileNavLink to="/admin/dashboard" label="Admin Panel" />}
                 </div>
             )}
         </nav>
@@ -129,18 +170,18 @@ function NavLink({ to, children, active }) {
     )
 }
 
-function DropItem({ to, label, onClick }) {
+function DropItem({ to, label, icon }) {
     return (
-        <Link to={to} onClick={onClick}
-            className="block px-4 py-2 text-sm text-brown-700 hover:bg-cream-100 transition-colors">
-            {label}
+        <Link to={to}
+            className="block px-4 py-2 text-sm text-brown-700 hover:bg-cream-100 transition-colors flex items-center gap-2">
+            {icon && <span>{icon}</span>} {label}
         </Link>
     )
 }
 
-function MobileNavLink({ to, label, onClick }) {
+function MobileNavLink({ to, label }) {
     return (
-        <Link to={to} onClick={onClick}
+        <Link to={to}
             className="block px-3 py-2 rounded-xl text-brown-700 hover:bg-cream-100 font-medium transition-colors">
             {label}
         </Link>

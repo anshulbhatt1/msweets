@@ -40,8 +40,10 @@ export default function Checkout() {
         setLoading(true)
         try {
             // 1. Create order on backend (validates stock + price server-side)
+            const fullAddress = `${full_name}, ${address}, ${city}, ${state} - ${pincode}, Phone: ${phone}`
             const orderRes = await api.post('/orders/create', {
-                shipping_address: { full_name, phone, address, city, state, pincode }
+                address: fullAddress,
+                items: items.map(i => ({ id: i.id, quantity: i.quantity }))
             })
             const order = orderRes.data.order
 

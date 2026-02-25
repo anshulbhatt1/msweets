@@ -1,26 +1,43 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Signup() {
-    const { signup } = useAuth()
+    const { signup, isLoggedIn } = useAuth()
     const navigate = useNavigate()
 
     const [form, setForm] = useState({ full_name: '', email: '', phone: '', password: '', confirm: '' })
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
+    // If already logged in, redirect
+    useEffect(() => {
+        if (isLoggedIn) navigate('/', { replace: true })
+    }, [isLoggedIn, navigate])
+
     const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
     const handleSubmit = async e => {
         e.preventDefault()
         setError('')
-        if (form.password !== form.confirm) { setError('Passwords do not match.'); return }
-        if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return }
+
+        if (!form.full_name.trim()) {
+            setError('Please enter your full name.')
+            return
+        }
+        if (form.password.length < 6) {
+            setError('Password must be at least 6 characters.')
+            return
+        }
+        if (form.password !== form.confirm) {
+            setError('Passwords do not match.')
+            return
+        }
+
         setLoading(true)
         try {
             await signup(form.email, form.password, form.full_name, form.phone)
-            navigate('/')
+            navigate('/', { replace: true })
         } catch (err) {
             setError(err.response?.data?.error || 'Signup failed. Please try again.')
         } finally {
@@ -31,7 +48,7 @@ export default function Signup() {
     return (
         <div className="min-h-screen flex items-center justify-center px-4 py-12"
             style={{ background: 'linear-gradient(135deg, #fdf0e0 0%, #fae0d0 100%)' }}>
-            <div className="w-full max-w-md">
+            <div className="w-full max-w-md animate-fade-in">
                 <div className="text-center mb-8">
                     <div className="w-16 h-16 bg-gradient-to-br from-brown-300 to-brown-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-warm">
                         🧁
@@ -43,37 +60,45 @@ export default function Signup() {
                 <div className="card shadow-warm-lg">
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">{error}</div>
+                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+                                <span>⚠️</span> {error}
+                            </div>
                         )}
 
                         <div>
-                            <label className="block text-sm font-medium text-brown-700 mb-1.5">Full Name</label>
-                            <input name="full_name" type="text" required value={form.full_name}
-                                onChange={handleChange} className="input" placeholder="Priya Sharma" />
+                            <label htmlFor="signup-name" className="block text-sm font-medium text-brown-700 mb-1.5">Full Name</label>
+                            <input id="signup-name" name="full_name" type="text" required value={form.full_name}
+                                onChange={handleChange} className="input" placeholder="Priya Sharma" autoComplete="name" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-brown-700 mb-1.5">Email</label>
-                            <input name="email" type="email" required value={form.email}
-                                onChange={handleChange} className="input" placeholder="priya@example.com" />
+                            <label htmlFor="signup-email" className="block text-sm font-medium text-brown-700 mb-1.5">Email</label>
+                            <input id="signup-email" name="email" type="email" required value={form.email}
+                                onChange={handleChange} className="input" placeholder="priya@example.com" autoComplete="email" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-brown-700 mb-1.5">Phone (optional)</label>
-                            <input name="phone" type="tel" value={form.phone}
-                                onChange={handleChange} className="input" placeholder="+91 98765 43210" />
+                            <label htmlFor="signup-phone" className="block text-sm font-medium text-brown-700 mb-1.5">Phone (optional)</label>
+                            <input id="signup-phone" name="phone" type="tel" value={form.phone}
+                                onChange={handleChange} className="input" placeholder="+91 98765 43210" autoComplete="tel" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-brown-700 mb-1.5">Password</label>
-                            <input name="password" type="password" required value={form.password}
-                                onChange={handleChange} className="input" placeholder="Min. 6 characters" />
+                            <label htmlFor="signup-password" className="block text-sm font-medium text-brown-700 mb-1.5">Password</label>
+                            <input id="signup-password" name="password" type="password" required value={form.password}
+                                onChange={handleChange} className="input" placeholder="Min. 6 characters" autoComplete="new-password" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-brown-700 mb-1.5">Confirm Password</label>
-                            <input name="confirm" type="password" required value={form.confirm}
-                                onChange={handleChange} className="input" placeholder="••••••••" />
+                            <label htmlFor="signup-confirm" className="block text-sm font-medium text-brown-700 mb-1.5">Confirm Password</label>
+                            <input id="signup-confirm" name="confirm" type="password" required value={form.confirm}
+                                onChange={handleChange} className="input" placeholder="••••••••" autoComplete="new-password" />
                         </div>
 
-                        <button type="submit" disabled={loading} className="btn-primary w-full mt-2 disabled:opacity-60">
-                            {loading ? 'Creating account…' : 'Create Account'}
+                        <button type="submit" disabled={loading}
+                            className="btn-primary w-full mt-2 disabled:opacity-60 flex items-center justify-center gap-2">
+                            {loading ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Creating account…
+                                </>
+                            ) : 'Create Account'}
                         </button>
                     </form>
 
