@@ -1,44 +1,61 @@
-const { supabaseAdmin } = require('../config/supabase');
+const Product = require('../models/Product');
+const Category = require('../models/Category');
 
 // GET /api/products
 const getProducts = async (req, res) => {
     try {
         const { category, search, sort = 'created_at', order = 'desc', page = 1, limit = 20 } = req.query;
-        const offset = (parseInt(page) - 1) * parseInt(limit);
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        let query = supabaseAdmin
-            .from('products')
-            .select(`*, categories(id, name)`, { count: 'exact' })
-            .eq('is_active', true);
+        const filter = { is_active: true };
 
+        // Category filter (by name or id)
         if (category) {
-            // category can be a name or id
-            const { data: cat } = await supabaseAdmin
-                .from('categories')
-                .select('id')
-                .or(`name.ilike.${category},id.eq.${category}`)
-                .maybeSingle();
-            if (cat) query = query.eq('category_id', cat.id);
+            let cat = null;
+            // Try by ObjectId first
+            if (category.match(/^[0-9a-fA-F]{24}$/)) {
+                cat = await Category.findById(category);
+            }
+            if (!cat) {
+                cat = await Category.findOne({ name: new RegExp(`^${category}$`, 'i') });
+            }
+            if (cat) filter.category_id = cat._id;
         }
 
+        // Search filter
         if (search) {
-            query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
+            filter.$or = [
+                { name: new RegExp(search, 'i') },
+                { description: new RegExp(search, 'i') }
+            ];
         }
 
-        query = query
-            .order(sort, { ascending: order === 'asc' })
-            .range(offset, offset + parseInt(limit) - 1);
+        const sortObj = { [sort]: order === 'asc' ? 1 : -1 };
 
-        const { data, error, count } = await query;
-        if (error) throw error;
+        const [products, total] = await Promise.all([
+            Product.find(filter)
+                .populate('category_id', 'id name')
+                .sort(sortObj)
+                .skip(skip)
+                .limit(parseInt(limit))
+                .lean(),
+            Product.countDocuments(filter)
+        ]);
+
+        // Map to match frontend expected shape (categories field)
+        const mapped = products.map(p => ({
+            ...p,
+            id: p._id,
+            categories: p.category_id ? { id: p.category_id._id, name: p.category_id.name } : null
+        }));
 
         res.json({
-            products: data,
+            products: mapped,
             pagination: {
                 page: parseInt(page),
                 limit: parseInt(limit),
-                total: count,
-                pages: Math.ceil(count / parseInt(limit))
+                total,
+                pages: Math.ceil(total / parseInt(limit))
             }
         });
     } catch (err) {
@@ -50,12 +67,9 @@ const getProducts = async (req, res) => {
 // GET /api/products/categories
 const getCategories = async (req, res) => {
     try {
-        const { data, error } = await supabaseAdmin
-            .from('categories')
-            .select('*')
-            .order('name');
-        if (error) throw error;
-        res.json({ categories: data });
+        const categories = await Category.find().sort({ name: 1 }).lean();
+        const mapped = categories.map(c => ({ ...c, id: c._id }));
+        res.json({ categories: mapped });
     } catch (err) {
         console.error('Get categories error:', err);
         res.status(500).json({ error: 'Failed to fetch categories.' });
@@ -67,18 +81,25 @@ const getProduct = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const { data: product, error } = await supabaseAdmin
-            .from('products')
-            .select(`*, categories(id, name)`)
-            .eq('id', id)
-            .eq('is_active', true)
-            .single();
-
-        if (error || !product) {
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
             return res.status(404).json({ error: 'Product not found.' });
         }
 
-        res.json({ product });
+        const product = await Product.findOne({ _id: id, is_active: true })
+            .populate('category_id', 'id name')
+            .lean();
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found.' });
+        }
+
+        const mapped = {
+            ...product,
+            id: product._id,
+            categories: product.category_id ? { id: product.category_id._id, name: product.category_id.name } : null
+        };
+
+        res.json({ product: mapped });
     } catch (err) {
         console.error('Get product error:', err);
         res.status(500).json({ error: 'Failed to fetch product.' });

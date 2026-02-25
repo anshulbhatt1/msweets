@@ -1,107 +1,79 @@
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
-
-const authRoutes = require('./routes/auth');
-const productRoutes = require('./routes/products');
-const cartRoutes = require('./routes/cart');
-const orderRoutes = require('./routes/orders');
-const paymentRoutes = require('./routes/payments');
-const adminRoutes = require('./routes/admin');
+const connectDB = require('./config/db');
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-// Security headers
+// ─── Connect to MongoDB ─────────────────────────────────────
+connectDB();
+
+// ─── Security ────────────────────────────────────────────────
 app.use(helmet());
 
-// CORS configuration
-app.use(cors({
+// ─── CORS ────────────────────────────────────────────────────
+const corsOptions = {
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['X-New-Access-Token']   // allow frontend to read refreshed tokens
-}));
+  exposedHeaders: ['X-New-Access-Token']
+};
+app.use(cors(corsOptions));
+console.log('🌐 CORS origin:', corsOptions.origin);
 
-// Body parsers + cookies (BEFORE routes)
+// ─── Body parsing ────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ── Rate limiting ───────────────────────────────────────────
-// General API limiter
+// ─── Rate limiting ───────────────────────────────────────────
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 200,
-  message: { error: 'Too many requests. Please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false
+  message: { error: 'Too many requests, please try again later.' }
 });
-app.use('/api/', apiLimiter);
 
-// Strict limiter for login/signup only (not /me or /refresh)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 15,
-  message: { error: 'Too many auth attempts. Please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Only apply to login and signup
-  skip: (req) => {
-    const path = req.path.toLowerCase();
-    return path !== '/login' && path !== '/signup';
-  }
+  max: 20,
+  message: { error: 'Too many login attempts, please try again later.' }
 });
 
-// ── Routes ──────────────────────────────────────────────────
-app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/signup', authLimiter);
 
-// Health check
+// ─── Routes ──────────────────────────────────────────────────
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/cart', require('./routes/cart'));
+app.use('/api/orders', require('./routes/orders'));
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/admin', require('./routes/admin'));
+
+// ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// 404 handler
+// ─── 404 ─────────────────────────────────────────────────────
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ error: 'Route not found.' });
 });
 
-// Global error handler
+// ─── Error handler ───────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error('Global error:', err);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error'
-  });
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error.' });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, async () => {
+// ─── Start ───────────────────────────────────────────────────
+app.listen(PORT, () => {
   console.log(`🚀 Sweet Haven Backend running on port ${PORT}`);
-  console.log(`🌐 CORS origin: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-
-  // ── Startup Supabase connectivity check ──
-  try {
-    const { supabaseAdmin } = require('./config/supabase');
-    const { data, error } = await supabaseAdmin.from('user_profiles').select('id').limit(1);
-    if (error) {
-      console.warn(`⚠️  Supabase connected but query failed: ${error.message}`);
-      console.warn(`   Check that your tables exist (run supabase-schema.sql if needed).`);
-    } else {
-      console.log(`✅ Supabase connected successfully!`);
-    }
-  } catch (err) {
-    console.error(`❌ SUPABASE CONNECTION FAILED!`);
-    console.error(`   URL: ${process.env.SUPABASE_URL}`);
-    console.error(`   Error: ${err.message}`);
-    console.error(`   → Your Supabase project may be PAUSED. Go to https://supabase.com/dashboard to restore it.`);
-    console.error(`   → Auth (login/signup) will NOT work until Supabase is reachable.`);
-  }
 });
+
+module.exports = app;

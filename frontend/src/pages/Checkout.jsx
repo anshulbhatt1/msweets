@@ -43,7 +43,8 @@ export default function Checkout() {
             const fullAddress = `${full_name}, ${address}, ${city}, ${state} - ${pincode}, Phone: ${phone}`
             const orderRes = await api.post('/orders/create', {
                 address: fullAddress,
-                items: items.map(i => ({ id: i.id, quantity: i.quantity }))
+                items: items.map(i => ({ id: i.id, quantity: i.quantity })),
+                delivery_fee: DELIVERY_FEE
             })
             const order = orderRes.data.order
 

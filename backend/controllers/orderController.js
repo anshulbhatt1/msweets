@@ -1,17 +1,21 @@
-const { supabaseAdmin } = require('../config/supabase');
+const mongoose = require('mongoose');
+const Order = require('../models/Order');
+const Product = require('../models/Product');
+const Cart = require('../models/Cart');
+const User = require('../models/User');
+const InventoryLog = require('../models/InventoryLog');
+
+const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 // POST /api/orders/create
 const createOrder = async (req, res) => {
     try {
-        const { address, items: frontendItems } = req.body;
+        const { address, items: frontendItems, delivery_fee } = req.body;
         const userId = req.user.id;
 
-        // Optionally update user address on profile
+        // Optionally update user address
         if (address) {
-            await supabaseAdmin
-                .from('user_profiles')
-                .update({ address })
-                .eq('id', userId);
+            await User.findByIdAndUpdate(userId, { address });
         }
 
         let orderItemsSource = [];
@@ -21,56 +25,48 @@ const createOrder = async (req, res) => {
             orderItemsSource = frontendItems;
         } else {
             // Fallback: use server-side cart
-            const { data: cart } = await supabaseAdmin
-                .from('carts')
-                .select('id')
-                .eq('user_id', userId)
-                .maybeSingle();
-
-            if (!cart) return res.status(400).json({ error: 'Your cart is empty.' });
-
-            const { data: cartItems } = await supabaseAdmin
-                .from('cart_items')
-                .select(`*, products(id, name, price, stock, is_active)`)
-                .eq('cart_id', cart.id);
-
-            if (!cartItems || cartItems.length === 0) {
+            const cart = await Cart.findOne({ user_id: userId });
+            if (!cart || cart.items.length === 0) {
                 return res.status(400).json({ error: 'Your cart is empty.' });
             }
 
-            orderItemsSource = cartItems.map(ci => ({
-                id: ci.products.id,
+            await cart.populate('items.product_id', 'name price stock is_active');
+
+            orderItemsSource = cart.items.map(ci => ({
+                id: ci.product_id._id.toString(),
                 quantity: ci.quantity
             }));
         }
 
-        // Validate items — always use server-side price, never trust frontend
+        // Validate items — always use server-side price
         let total = 0;
         const orderItemsData = [];
         const errors = [];
 
         for (const item of orderItemsSource) {
-            const productId = item.id || item.product_id;
+            const productId = item.id || item.product_id || item._id;
             const qty = parseInt(item.quantity);
 
-            const { data: product, error: pe } = await supabaseAdmin
-                .from('products')
-                .select('id, name, price, stock, is_active')
-                .eq('id', productId)
-                .single();
+            if (!productId || !isValidId(productId)) {
+                errors.push('Invalid product. Please refresh your cart and try again.');
+                continue;
+            }
 
-            if (pe || !product || !product.is_active) {
-                errors.push(`A product is no longer available.`);
+            const product = await Product.findById(productId);
+
+            if (!product || !product.is_active) {
+                errors.push('A product is no longer available.');
                 continue;
             }
             if (qty > product.stock) {
                 errors.push(`"${product.name}" only has ${product.stock} units left.`);
                 continue;
             }
+
             const serverPrice = parseFloat(product.price);
             total += serverPrice * qty;
             orderItemsData.push({
-                product_id: product.id,
+                product_id: product._id,
                 quantity: qty,
                 price: serverPrice
             });
@@ -79,60 +75,44 @@ const createOrder = async (req, res) => {
         if (errors.length > 0) return res.status(400).json({ error: errors.join(' ') });
         if (orderItemsData.length === 0) return res.status(400).json({ error: 'No valid items in cart.' });
 
-        // Create order
-        const { data: order, error: orderError } = await supabaseAdmin
-            .from('orders')
-            .insert({
-                user_id: userId,
-                status: 'pending',
-                payment_status: 'unpaid',
-                total_amount: total
-            })
-            .select()
-            .single();
+        // Calculate delivery fee server-side (₹50 if subtotal < ₹500, else free)
+        const serverDeliveryFee = total >= 500 ? 0 : 50;
+        const grandTotal = total + serverDeliveryFee;
 
-        if (orderError) throw orderError;
+        // Create order with embedded items
+        const order = await Order.create({
+            user_id: userId,
+            status: 'pending',
+            payment_status: 'unpaid',
+            total_amount: grandTotal,
+            delivery_fee: serverDeliveryFee,
+            order_items: orderItemsData
+        });
 
-        // Insert order items
-        const itemsWithOrderId = orderItemsData.map(i => ({ ...i, order_id: order.id }));
-        await supabaseAdmin.from('order_items').insert(itemsWithOrderId);
-
-        // Deduct stock for each product
+        // Deduct stock and log inventory
         for (const item of orderItemsData) {
-            const { data: prod } = await supabaseAdmin
-                .from('products')
-                .select('stock')
-                .eq('id', item.product_id)
-                .single();
+            await Product.findByIdAndUpdate(item.product_id, {
+                $inc: { stock: -item.quantity }
+            });
 
-            if (prod) {
-                const newStock = prod.stock - item.quantity;
-                await supabaseAdmin
-                    .from('products')
-                    .update({ stock: Math.max(0, newStock) })
-                    .eq('id', item.product_id);
-
-                // Log inventory change
-                await supabaseAdmin.from('inventory_logs').insert({
-                    product_id: item.product_id,
-                    change_amount: -item.quantity,
-                    reason: `Order ${order.id.slice(0, 8)}`
-                });
-            }
+            await InventoryLog.create({
+                product_id: item.product_id,
+                change_amount: -item.quantity,
+                reason: `Order ${order._id.toString().slice(0, 8)}`
+            });
         }
 
-        // Clear server-side cart if it exists
-        const { data: cart } = await supabaseAdmin
-            .from('carts')
-            .select('id')
-            .eq('user_id', userId)
-            .maybeSingle();
+        // Clear server-side cart
+        await Cart.findOneAndUpdate(
+            { user_id: userId },
+            { $set: { items: [] } }
+        );
 
-        if (cart) {
-            await supabaseAdmin.from('cart_items').delete().eq('cart_id', cart.id);
-        }
+        // Return order with id field
+        const orderResponse = order.toObject();
+        orderResponse.id = orderResponse._id;
 
-        res.status(201).json({ message: 'Order created successfully.', order });
+        res.status(201).json({ message: 'Order created successfully.', order: orderResponse });
     } catch (err) {
         console.error('Create order error:', err);
         res.status(500).json({ error: 'Failed to create order.' });
@@ -142,13 +122,19 @@ const createOrder = async (req, res) => {
 // GET /api/orders/my
 const getMyOrders = async (req, res) => {
     try {
-        const { data: orders, error } = await supabaseAdmin
-            .from('orders')
-            .select(`*, order_items(*, products(id, name, image_url, price))`)
-            .eq('user_id', req.user.id)
-            .order('created_at', { ascending: false });
+        const orders = await Order.find({ user_id: req.user.id })
+            .sort({ created_at: -1 })
+            .lean();
 
-        if (error) throw error;
+        // Populate product details in order items
+        for (const order of orders) {
+            order.id = order._id;
+            for (const item of order.order_items) {
+                const product = await Product.findById(item.product_id).select('name image_url price').lean();
+                item.products = product ? { id: product._id, name: product.name, image_url: product.image_url, price: product.price } : null;
+            }
+        }
+
         res.json({ orders: orders || [] });
     } catch (err) {
         console.error('Get my orders error:', err);
@@ -160,14 +146,26 @@ const getMyOrders = async (req, res) => {
 const getMyOrder = async (req, res) => {
     try {
         const { id } = req.params;
-        const { data: order, error } = await supabaseAdmin
-            .from('orders')
-            .select(`*, order_items(*, products(id, name, image_url, price)), payments(*)`)
-            .eq('id', id)
-            .eq('user_id', req.user.id)
-            .single();
 
-        if (error || !order) return res.status(404).json({ error: 'Order not found.' });
+        if (!isValidId(id)) {
+            return res.status(404).json({ error: 'Order not found.' });
+        }
+
+        const order = await Order.findOne({ _id: id, user_id: req.user.id }).lean();
+        if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+        order.id = order._id;
+
+        // Populate products in items
+        for (const item of order.order_items) {
+            const product = await Product.findById(item.product_id).select('name image_url price').lean();
+            item.products = product ? { id: product._id, name: product.name, image_url: product.image_url, price: product.price } : null;
+        }
+
+        // Get related payments
+        const Payment = require('../models/Payment');
+        order.payments = await Payment.find({ order_id: order._id }).lean();
+
         res.json({ order });
     } catch (err) {
         console.error('Get order error:', err);

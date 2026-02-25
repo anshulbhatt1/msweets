@@ -1,6 +1,10 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const { supabaseAdmin } = require('../config/supabase');
+const Order = require('../models/Order');
+const Product = require('../models/Product');
+const Payment = require('../models/Payment');
+const Cart = require('../models/Cart');
+const InventoryLog = require('../models/InventoryLog');
 
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
@@ -13,15 +17,8 @@ const createRazorpayOrder = async (req, res) => {
         const { order_id } = req.body;
         if (!order_id) return res.status(400).json({ error: 'Order ID is required.' });
 
-        // Fetch order — use server-side amount only
-        const { data: order, error } = await supabaseAdmin
-            .from('orders')
-            .select('*')
-            .eq('id', order_id)
-            .eq('user_id', req.user.id)
-            .single();
-
-        if (error || !order) return res.status(404).json({ error: 'Order not found.' });
+        const order = await Order.findOne({ _id: order_id, user_id: req.user.id });
+        if (!order) return res.status(404).json({ error: 'Order not found.' });
         if (order.payment_status === 'paid') return res.status(400).json({ error: 'Order is already paid.' });
 
         // Idempotency: return existing razorpay order if already created
@@ -39,19 +36,17 @@ const createRazorpayOrder = async (req, res) => {
         const rzpOrder = await razorpay.orders.create({
             amount: amountInPaise,
             currency: 'INR',
-            receipt: `rcpt_${order_id.slice(0, 20)}`,
-            notes: { order_id, user_id: req.user.id }
+            receipt: `rcpt_${order._id.toString().slice(0, 20)}`,
+            notes: { order_id: order._id.toString(), user_id: req.user.id }
         });
 
-        // Save razorpay_order_id on our orders table
-        await supabaseAdmin
-            .from('orders')
-            .update({ razorpay_order_id: rzpOrder.id })
-            .eq('id', order_id);
+        // Save razorpay_order_id
+        order.razorpay_order_id = rzpOrder.id;
+        await order.save();
 
         // Create pending payment record
-        await supabaseAdmin.from('payments').insert({
-            order_id,
+        await Payment.create({
+            order_id: order._id,
             amount: order.total_amount,
             status: 'pending'
         });
@@ -85,22 +80,16 @@ const verifyPayment = async (req, res) => {
             .digest('hex');
 
         if (expected !== razorpay_signature) {
-            await supabaseAdmin
-                .from('payments')
-                .update({ status: 'failed' })
-                .eq('order_id', order_id);
+            await Payment.findOneAndUpdate(
+                { order_id },
+                { status: 'failed' }
+            );
             return res.status(400).json({ error: 'Payment verification failed. Invalid signature.' });
         }
 
-        // Fetch order with items
-        const { data: order, error: oe } = await supabaseAdmin
-            .from('orders')
-            .select(`*, order_items(*, products(id, stock))`)
-            .eq('id', order_id)
-            .eq('user_id', req.user.id)
-            .single();
-
-        if (oe || !order) return res.status(404).json({ error: 'Order not found.' });
+        // Fetch order
+        const order = await Order.findOne({ _id: order_id, user_id: req.user.id });
+        if (!order) return res.status(404).json({ error: 'Order not found.' });
 
         // Idempotency
         if (order.payment_status === 'paid') {
@@ -108,34 +97,28 @@ const verifyPayment = async (req, res) => {
         }
 
         // Update payment record
-        await supabaseAdmin
-            .from('payments')
-            .update({
+        await Payment.findOneAndUpdate(
+            { order_id },
+            {
                 razorpay_payment_id,
                 razorpay_signature,
                 status: 'captured',
                 method: 'razorpay'
-            })
-            .eq('order_id', order_id);
+            }
+        );
 
-        // Update order
-        await supabaseAdmin
-            .from('orders')
-            .update({ status: 'confirmed', payment_status: 'paid' })
-            .eq('id', order_id);
+        // Update order status
+        order.status = 'confirmed';
+        order.payment_status = 'paid';
+        await order.save();
 
-        // Reduce stock & log inventory
+        // Deduct stock & log inventory for each item
         for (const item of order.order_items) {
-            const product = item.products;
-            if (!product) continue;
-            const newStock = Math.max(0, product.stock - item.quantity);
+            await Product.findByIdAndUpdate(item.product_id, {
+                $inc: { stock: -item.quantity }
+            });
 
-            await supabaseAdmin
-                .from('products')
-                .update({ stock: newStock })
-                .eq('id', item.product_id);
-
-            await supabaseAdmin.from('inventory_logs').insert({
+            await InventoryLog.create({
                 product_id: item.product_id,
                 change_amount: -item.quantity,
                 reason: `Sale — Order ${order_id}`
@@ -143,15 +126,10 @@ const verifyPayment = async (req, res) => {
         }
 
         // Clear cart
-        const { data: cart } = await supabaseAdmin
-            .from('carts')
-            .select('id')
-            .eq('user_id', req.user.id)
-            .maybeSingle();
-
-        if (cart) {
-            await supabaseAdmin.from('cart_items').delete().eq('cart_id', cart.id);
-        }
+        await Cart.findOneAndUpdate(
+            { user_id: req.user.id },
+            { $set: { items: [] } }
+        );
 
         res.json({ message: 'Payment successful! Your order has been confirmed.', order_id });
     } catch (err) {
