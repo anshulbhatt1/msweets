@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
+import Logo from './Logo'
 
 export default function Navbar() {
     const { user, logout, isAdmin } = useAuth()
@@ -46,10 +47,8 @@ export default function Navbar() {
 
                     {/* Logo */}
                     <Link to="/" className="flex items-center gap-2 group">
-                        <div className="w-9 h-9 bg-gradient-to-br from-brown-300 to-brown-500 rounded-full flex items-center justify-center text-white text-lg shadow-warm group-hover:shadow-warm-lg transition-all">
-                            🧁
-                        </div>
-                        <span className="font-display font-bold text-xl text-brown-700">Sweet Haven</span>
+                        <Logo size="sm" variant="light" />
+                        <span className="font-display font-bold text-xl text-brown-700">Manoj Sweets</span>
                     </Link>
 
                     {/* Desktop nav links */}

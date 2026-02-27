@@ -73,7 +73,7 @@ app.use((err, req, res, next) => {
 
 // ─── Start ───────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`🚀 Sweet Haven Backend running on port ${PORT}`);
+  console.log(`🚀 Manoj Sweets Backend running on port ${PORT}`);
 });
 
 module.exports = app;

@@ -30,7 +30,7 @@ export default function AdminDashboard() {
             <main className="flex-1 overflow-y-auto p-8">
                 <div className="mb-8">
                     <h1 className="font-display text-3xl font-bold text-brown-800">Dashboard</h1>
-                    <p className="text-brown-400 mt-1">Sweet Haven Analytics Overview</p>
+                    <p className="text-brown-400 mt-1">Manoj Sweets Analytics Overview</p>
                 </div>
 
                 {/* Stats Cards */}

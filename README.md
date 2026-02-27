@@ -1,4 +1,4 @@
-# 🧁 Sweet Haven — Full-Stack Bakery E-Commerce
+# 🧁 Manoj Sweets — Full-Stack Bakery E-Commerce
 
 A production-ready bakery e-commerce website built with **React + Vite** (frontend) and **Node.js + Express** (backend), using **Supabase** as the database and **Razorpay** for payments.
 

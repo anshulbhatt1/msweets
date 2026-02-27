@@ -8,7 +8,7 @@ export default function About() {
                     <div className="text-6xl mb-6">🧁</div>
                     <h1 className="font-display text-5xl font-bold text-brown-800 mb-4">Our Story</h1>
                     <p className="text-brown-500 text-lg leading-relaxed">
-                        Sweet Haven was born out of a grandmother's kitchen and a family recipe passed down through three generations.
+                        Manoj Sweets was born out of a grandmother's kitchen and a family recipe passed down through three generations.
                         We believe that every sweet treat carries a memory, a celebration, and a moment of pure joy.
                     </p>
                 </div>
@@ -17,7 +17,7 @@ export default function About() {
             {/* Values */}
             <section className="py-16 bg-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <h2 className="font-display text-3xl font-bold text-brown-800 text-center mb-10">Why Choose Sweet Haven?</h2>
+                    <h2 className="font-display text-3xl font-bold text-brown-800 text-center mb-10">Why Choose Manoj Sweets?</h2>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         {[
                             { icon: '🌿', title: 'Pure Ingredients', desc: 'No preservatives. No artificial colours. Just natural goodness.' },

@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Logo from './Logo'
 
 const NAV = [
     { to: '/admin/dashboard', icon: '📊', label: 'Dashboard' },
@@ -23,9 +24,9 @@ export default function AdminSidebar() {
             {/* Logo */}
             <div className="px-6 py-6 border-b border-brown-700">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-brown-400 rounded-xl flex items-center justify-center text-xl">🧁</div>
+                    <Logo size="md" variant="dark" />
                     <div>
-                        <p className="font-display font-bold text-lg text-white leading-none">Sweet Haven</p>
+                        <p className="font-display font-bold text-lg text-white leading-none">Manoj Sweets</p>
                         <p className="text-brown-300 text-xs mt-0.5">Admin Panel</p>
                     </div>
                 </div>

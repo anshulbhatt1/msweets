@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import Logo from '../../components/Logo'
 
 export default function AdminLogin() {
     const { login, logout, isLoggedIn, isAdmin } = useAuth()
@@ -54,11 +55,11 @@ export default function AdminLogin() {
         <div className="min-h-screen flex items-center justify-center bg-brown-800 px-4">
             <div className="w-full max-w-md animate-fade-in">
                 <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-brown-400 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-warm-lg">
-                        🧁
+                    <div className="flex justify-center mb-4">
+                        <Logo size="lg" variant="dark" />
                     </div>
                     <h1 className="font-display text-3xl font-bold text-white">Admin Portal</h1>
-                    <p className="text-brown-300 mt-1">Sweet Haven Management</p>
+                    <p className="text-brown-300 mt-1">Manoj Sweets Management</p>
                 </div>
 
                 <div className="bg-white rounded-3xl p-8 shadow-warm-lg">

@@ -1,7 +1,7 @@
 {
   "name": "sweethaven-backend",
   "version": "1.0.0",
-  "description": "Sweet Haven Bakery E-Commerce Backend",
+  "description": "Manoj Sweets Bakery E-Commerce Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

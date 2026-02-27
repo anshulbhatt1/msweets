@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Logo from '../components/Logo'
 
 export default function Login() {
     const { login, isLoggedIn, isAdmin } = useAuth()
@@ -56,11 +57,11 @@ export default function Login() {
 
             <div className="w-full max-w-md animate-fade-in">
                 <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-gradient-to-br from-brown-300 to-brown-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-warm">
-                        🧁
+                    <div className="flex justify-center mb-4">
+                        <Logo size="lg" variant="light" />
                     </div>
                     <h1 className="font-display text-3xl font-bold text-brown-800">Welcome back!</h1>
-                    <p className="text-brown-400 mt-1">Sign in to your Sweet Haven account</p>
+                    <p className="text-brown-400 mt-1">Sign in to your Manoj Sweets account</p>
                 </div>
 
                 <div className="card shadow-warm-lg">

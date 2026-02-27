@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import Logo from './Logo'
 
 export default function Footer() {
     return (
@@ -9,8 +10,8 @@ export default function Footer() {
                     {/* Brand */}
                     <div className="md:col-span-2">
                         <div className="flex items-center gap-2 mb-4">
-                            <div className="w-10 h-10 bg-brown-400 rounded-full flex items-center justify-center text-2xl">🧁</div>
-                            <span className="font-display font-bold text-2xl text-white">Sweet Haven</span>
+                            <Logo size="md" variant="dark" />
+                            <span className="font-display font-bold text-2xl text-white">Manoj Sweets</span>
                         </div>
                         <p className="text-cream-200 text-sm leading-relaxed max-w-xs">
                             Handcrafted sweets, chocolates and cakes made with pure ingredients and lots of love. Delivered fresh to your doorstep.
@@ -48,7 +49,7 @@ export default function Footer() {
 
                 <hr className="border-brown-700 my-8" />
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-cream-300">
-                    <p>© 2026 Sweet Haven. Made with ❤️ for sweet lovers.</p>
+                    <p>© 2026 Manoj Sweets. Made with ❤️ for sweet lovers.</p>
                     <div className="flex gap-4">
                         <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
                         <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>

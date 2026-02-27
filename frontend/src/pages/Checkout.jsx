@@ -57,7 +57,7 @@ export default function Checkout() {
                 amount: payRes.data.amount,
                 currency: 'INR',
                 order_id: payRes.data.razorpay_order_id,
-                name: 'Sweet Haven',
+                name: 'Manoj Sweets',
                 description: 'Order Payment',
                 prefill: { name: full_name, contact: phone, email: user?.email },
                 theme: { color: '#b07d50' },
